@@ -38,11 +38,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             do {
                 let installer = HookInstaller()
                 try installer.installHooks()
-
-                if let bundledScript = Bundle.main.path(forResource: "session-noticer-hook", ofType: nil) {
-                    try installer.installHookScript(from: bundledScript)
-                }
-
+                try installer.installHookScriptFromKnownLocations()
                 UserDefaults.standard.set(true, forKey: "hooksInstalled")
             } catch {
                 NSLog("SessionNoticer: Failed to install hooks: \(error)")

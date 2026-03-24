@@ -34,15 +34,50 @@ class HookInstaller {
         try data.write(to: settingsPath)
     }
 
-    func installHookScript(from bundlePath: String) throws {
+    func installHookScript(from sourcePath: String) throws {
         let targetURL = URL(fileURLWithPath: hookScriptPath)
         let targetDir = targetURL.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: targetDir, withIntermediateDirectories: true)
         if FileManager.default.fileExists(atPath: hookScriptPath) {
             try FileManager.default.removeItem(atPath: hookScriptPath)
         }
-        try FileManager.default.createSymbolicLink(atPath: hookScriptPath, withDestinationPath: bundlePath)
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: bundlePath)
+        // Copy instead of symlink — works for both .app bundles and SPM builds
+        try FileManager.default.copyItem(atPath: sourcePath, toPath: hookScriptPath)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: hookScriptPath)
+    }
+
+    /// Install hook script by searching known locations (bundle, project dir, executable dir)
+    func installHookScriptFromKnownLocations() throws {
+        // Try Bundle.main first (.app bundle)
+        if let bundled = Bundle.main.path(forResource: "session-noticer-hook", ofType: nil) {
+            try installHookScript(from: bundled)
+            return
+        }
+
+        // Try relative to the executable (SPM builds: .build/debug/SessionNoticer)
+        let executableURL = URL(fileURLWithPath: ProcessInfo.processInfo.arguments[0])
+        let projectCandidates = [
+            // From .build/debug/ → project root
+            executableURL.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+                .appendingPathComponent("SessionNoticer/Resources/session-noticer-hook"),
+            // Direct sibling
+            executableURL.deletingLastPathComponent()
+                .appendingPathComponent("session-noticer-hook"),
+        ]
+
+        for candidate in projectCandidates {
+            if FileManager.default.fileExists(atPath: candidate.path) {
+                try installHookScript(from: candidate.path)
+                return
+            }
+        }
+
+        // Already installed? Check if target exists and is executable
+        if FileManager.default.isExecutableFile(atPath: hookScriptPath) {
+            return // Already installed
+        }
+
+        NSLog("SessionNoticer: Could not find session-noticer-hook script to install")
     }
 
     private func loadExistingSettings() -> [String: Any] {
