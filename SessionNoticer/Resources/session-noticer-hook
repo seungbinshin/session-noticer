@@ -1,0 +1,49 @@
+#!/bin/bash
+# session-noticer-hook: Called by Claude Code hooks to write event files
+# Usage: session-noticer-hook <event_type>
+# Reads hook JSON payload from stdin
+
+set -euo pipefail
+
+EVENT_TYPE="${1:-unknown}"
+EVENTS_DIR="$HOME/Library/Application Support/SessionNoticer/events"
+mkdir -p "$EVENTS_DIR"
+
+# Read full payload from stdin
+PAYLOAD=$(cat)
+
+# Extract all fields and write event file in a single python3 call
+# This avoids shell word-splitting issues with paths containing spaces
+printf '%s' "$PAYLOAD" | /usr/bin/python3 -c "
+import sys, json, time, os
+
+d = json.load(sys.stdin)
+ts = int(time.time() * 1000)
+event_type = '${EVENT_TYPE}'
+ppid = ${PPID}
+
+event = {
+    'event': event_type,
+    'session_id': d.get('session_id', 'unknown'),
+    'pid': ppid,
+    'cwd': d.get('cwd', ''),
+    'transcript_path': d.get('transcript_path', ''),
+    'notification_type': d.get('notification_type', ''),
+    'timestamp': ts
+}
+
+# Use timestamp-eventtype-pid.json to avoid collisions
+filename = f'{ts}-{event_type}-{ppid}.json'
+events_dir = os.path.expanduser('~/Library/Application Support/SessionNoticer/events')
+filepath = os.path.join(events_dir, filename)
+
+# If file exists (extremely unlikely), append random suffix
+if os.path.exists(filepath):
+    import random, string
+    suffix = ''.join(random.choices(string.ascii_lowercase, k=4))
+    filename = f'{ts}-{event_type}-{ppid}-{suffix}.json'
+    filepath = os.path.join(events_dir, filename)
+
+with open(filepath, 'w') as f:
+    json.dump(event, f)
+"
