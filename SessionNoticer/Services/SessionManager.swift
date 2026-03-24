@@ -5,7 +5,7 @@ class SessionManager: ObservableObject {
     @Published var sessions: [String: Session] = [:]
 
     var needsAttentionCount: Int {
-        sessions.values.filter { $0.state == .needsPermission }.count
+        sessions.values.filter { $0.state == .needsPermission || $0.state == .awaitingResponse }.count
     }
 
     var sortedSessions: [Session] {
@@ -13,8 +13,9 @@ class SessionManager: ObservableObject {
             let order: (SessionState) -> Int = {
                 switch $0 {
                 case .needsPermission: return 0
-                case .running: return 1
-                case .idle: return 2
+                case .awaitingResponse: return 1
+                case .running: return 2
+                case .completed: return 3
                 }
             }
             if order(a.state) != order(b.state) {
@@ -24,7 +25,7 @@ class SessionManager: ObservableObject {
         }
     }
 
-    /// Returns true if the event triggered a transition to needsPermission (for banner)
+    /// Returns true if the event triggered a state that needs user attention (for banner)
     @discardableResult
     func processEvent(_ event: HookEvent) -> Bool {
         switch event.event {
@@ -48,9 +49,10 @@ class SessionManager: ObservableObject {
 
         case .stop:
             guard sessions[event.sessionId] != nil else { return false }
-            sessions[event.sessionId]?.state = .idle
+            let wasRunning = sessions[event.sessionId]?.state == .running
+            sessions[event.sessionId]?.state = .awaitingResponse
             sessions[event.sessionId]?.lastUpdated = Date()
-            return false
+            return wasRunning
 
         case .notification:
             guard sessions[event.sessionId] != nil else { return false }
@@ -60,7 +62,7 @@ class SessionManager: ObservableObject {
                 sessions[event.sessionId]?.lastUpdated = Date()
                 return wasNotAlready
             } else if event.notificationType == .idlePrompt {
-                sessions[event.sessionId]?.state = .idle
+                sessions[event.sessionId]?.state = .completed
                 sessions[event.sessionId]?.lastUpdated = Date()
             }
             return false

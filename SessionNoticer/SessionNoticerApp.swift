@@ -122,17 +122,28 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     func updateIcon() {
         guard let button = statusItem?.button else { return }
-        let count = sessionManager.needsAttentionCount
-        if count > 0 {
-            let image = NSImage(systemSymbolName: "cpu.fill", accessibilityDescription: "Needs attention")!
+        let permCount = sessionManager.sessions.values.filter { $0.state == .needsPermission }.count
+        let awaitCount = sessionManager.sessions.values.filter { $0.state == .awaitingResponse }.count
+        let attentionCount = permCount + awaitCount
+
+        if permCount > 0 {
+            // Orange: at least one session needs permission (most urgent)
+            let image = NSImage(systemSymbolName: "cpu.fill", accessibilityDescription: "Needs permission")!
             let config = NSImage.SymbolConfiguration(paletteColors: [.systemOrange])
             button.image = image.withSymbolConfiguration(config)
-            button.title = " \(count)"
+            button.title = " \(attentionCount)"
+        } else if awaitCount > 0 {
+            // Yellow: sessions awaiting user response
+            let image = NSImage(systemSymbolName: "cpu.fill", accessibilityDescription: "Awaiting response")!
+            let config = NSImage.SymbolConfiguration(paletteColors: [.systemYellow])
+            button.image = image.withSymbolConfiguration(config)
+            button.title = " \(awaitCount)"
         } else if sessionManager.sessions.isEmpty {
             button.image = NSImage(systemSymbolName: "cpu", accessibilityDescription: "Session Noticer")
             button.image?.isTemplate = true
             button.title = ""
         } else {
+            // Green: sessions running or completed, no action needed
             let image = NSImage(systemSymbolName: "cpu.fill", accessibilityDescription: "Sessions active")!
             let config = NSImage.SymbolConfiguration(paletteColors: [.systemGreen])
             button.image = image.withSymbolConfiguration(config)

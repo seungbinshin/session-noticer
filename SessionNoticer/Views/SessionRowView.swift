@@ -7,9 +7,9 @@ struct SessionRowView: View {
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 8) {
-                if session.state == .needsPermission {
+                if session.state == .needsPermission || session.state == .awaitingResponse {
                     RoundedRectangle(cornerRadius: 1.5)
-                        .fill(Color.orange)
+                        .fill(session.state == .needsPermission ? Color.orange : Color.yellow)
                         .frame(width: 3)
                 }
                 VStack(alignment: .leading, spacing: 2) {
@@ -28,7 +28,11 @@ struct SessionRowView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(session.state == .needsPermission ? Color.orange.opacity(0.08) : Color.clear)
+            .background(
+                session.state == .needsPermission ? Color.orange.opacity(0.08) :
+                session.state == .awaitingResponse ? Color.yellow.opacity(0.06) :
+                Color.clear
+            )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -51,24 +55,27 @@ struct StatusPill: View {
     private var label: String {
         switch state {
         case .running: return "Running"
-        case .idle: return "Idle"
+        case .awaitingResponse: return "Awaiting Response"
         case .needsPermission: return "Needs Permission"
+        case .completed: return "Completed"
         }
     }
 
     private var foregroundColor: Color {
         switch state {
         case .running: return .green
-        case .idle: return .gray
+        case .awaitingResponse: return .yellow
         case .needsPermission: return .orange
+        case .completed: return .gray
         }
     }
 
     private var backgroundColor: Color {
         switch state {
         case .running: return .green.opacity(0.15)
-        case .idle: return .gray.opacity(0.15)
+        case .awaitingResponse: return .yellow.opacity(0.15)
         case .needsPermission: return .orange.opacity(0.15)
+        case .completed: return .gray.opacity(0.15)
         }
     }
 }

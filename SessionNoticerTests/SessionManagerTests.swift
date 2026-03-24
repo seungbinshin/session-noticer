@@ -15,10 +15,10 @@ final class SessionManagerTests: XCTestCase {
         XCTAssertEqual(manager.sessions["s1"]?.state, .running)
     }
 
-    func testStopTransitionsToIdle() {
+    func testStopTransitionsToAwaitingResponse() {
         manager.processEvent(makeEvent(type: .sessionStart, sessionId: "s1"))
         manager.processEvent(makeEvent(type: .stop, sessionId: "s1"))
-        XCTAssertEqual(manager.sessions["s1"]?.state, .idle)
+        XCTAssertEqual(manager.sessions["s1"]?.state, .awaitingResponse)
     }
 
     func testNotificationPermissionTransitionsToNeedsPermission() {
@@ -40,18 +40,21 @@ final class SessionManagerTests: XCTestCase {
         XCTAssertNil(manager.sessions["s1"])
     }
 
-    func testNeedsPermissionCount() {
+    func testNeedsAttentionCountIncludesBothStates() {
         manager.processEvent(makeEvent(type: .sessionStart, sessionId: "s1"))
         manager.processEvent(makeEvent(type: .sessionStart, sessionId: "s2"))
+        manager.processEvent(makeEvent(type: .sessionStart, sessionId: "s3"))
+        // s1: needs permission, s2: awaiting response, s3: running
         manager.processEvent(makeEvent(type: .notification, sessionId: "s1", notifType: .permissionPrompt))
-        XCTAssertEqual(manager.needsAttentionCount, 1)
+        manager.processEvent(makeEvent(type: .stop, sessionId: "s2"))
+        XCTAssertEqual(manager.needsAttentionCount, 2)
     }
 
-    func testStopFromNeedsPermissionTransitionsToIdle() {
+    func testStopFromNeedsPermissionTransitionsToAwaitingResponse() {
         manager.processEvent(makeEvent(type: .sessionStart, sessionId: "s1"))
         manager.processEvent(makeEvent(type: .notification, sessionId: "s1", notifType: .permissionPrompt))
         manager.processEvent(makeEvent(type: .stop, sessionId: "s1"))
-        XCTAssertEqual(manager.sessions["s1"]?.state, .idle)
+        XCTAssertEqual(manager.sessions["s1"]?.state, .awaitingResponse)
     }
 
     func testSessionEndFromAnyState() {
@@ -59,6 +62,26 @@ final class SessionManagerTests: XCTestCase {
         manager.processEvent(makeEvent(type: .notification, sessionId: "s1", notifType: .permissionPrompt))
         manager.processEvent(makeEvent(type: .sessionEnd, sessionId: "s1"))
         XCTAssertNil(manager.sessions["s1"])
+    }
+
+    func testIdlePromptTransitionsToCompleted() {
+        manager.processEvent(makeEvent(type: .sessionStart, sessionId: "s1"))
+        manager.processEvent(makeEvent(type: .stop, sessionId: "s1"))
+        manager.processEvent(makeEvent(type: .notification, sessionId: "s1", notifType: .idlePrompt))
+        XCTAssertEqual(manager.sessions["s1"]?.state, .completed)
+    }
+
+    func testStopReturnsTrueWhenTransitioningFromRunning() {
+        manager.processEvent(makeEvent(type: .sessionStart, sessionId: "s1"))
+        let triggered = manager.processEvent(makeEvent(type: .stop, sessionId: "s1"))
+        XCTAssertTrue(triggered)
+    }
+
+    func testStopReturnsFalseWhenAlreadyAwaiting() {
+        manager.processEvent(makeEvent(type: .sessionStart, sessionId: "s1"))
+        manager.processEvent(makeEvent(type: .stop, sessionId: "s1"))
+        let triggered = manager.processEvent(makeEvent(type: .stop, sessionId: "s1"))
+        XCTAssertFalse(triggered)
     }
 
     // MARK: - Helpers

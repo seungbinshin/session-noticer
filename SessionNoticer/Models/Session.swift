@@ -2,8 +2,9 @@ import Foundation
 
 enum SessionState {
     case running
-    case idle
-    case needsPermission
+    case awaitingResponse   // Claude finished a turn, user needs to read and respond
+    case needsPermission    // Claude needs tool approval
+    case completed          // Session idle 60s+, task likely done
 }
 
 struct Session: Identifiable {

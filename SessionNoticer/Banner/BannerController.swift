@@ -39,9 +39,24 @@ class BannerController {
         window.hasShadow = true
         window.ignoresMouseEvents = false
 
+        let message: String
+        let tintColor: Color
+        switch session.state {
+        case .needsPermission:
+            message = "Needs permission"
+            tintColor = .orange
+        case .awaitingResponse:
+            message = "Awaiting your response"
+            tintColor = .yellow
+        default:
+            message = "Needs attention"
+            tintColor = .orange
+        }
+
         let bannerView = BannerView(
             projectName: session.projectName,
-            message: "Needs permission",
+            message: message,
+            tintColor: tintColor,
             onTap: { [weak self] in
                 ITerm2Focuser.focusSession(session, in: self?.sessionManager)
                 self?.hideBanner()
@@ -91,6 +106,7 @@ class BannerController {
 struct BannerView: View {
     let projectName: String
     let message: String
+    var tintColor: Color = .orange
     let onTap: () -> Void
 
     var body: some View {
@@ -98,11 +114,11 @@ struct BannerView: View {
             HStack(spacing: 10) {
                 Image(systemName: "cpu")
                     .font(.system(size: 18))
-                    .foregroundColor(.orange)
+                    .foregroundColor(tintColor)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(projectName)
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.orange)
+                        .foregroundColor(tintColor)
                     Text(message)
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
@@ -121,7 +137,7 @@ struct BannerView: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
-                    .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+                    .stroke(tintColor.opacity(0.3), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
