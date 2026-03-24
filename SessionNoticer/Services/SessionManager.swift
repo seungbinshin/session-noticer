@@ -76,4 +76,31 @@ class SessionManager: ObservableObject {
     func addDiscoveredSession(_ session: Session) {
         sessions[session.id] = session
     }
+
+    private var stalePidTimers: [String: Date] = [:]
+
+    func startStaleSessionCleanup() {
+        Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
+            self?.cleanupStaleSessions()
+        }
+    }
+
+    private func cleanupStaleSessions() {
+        let now = Date()
+        for (sessionId, session) in sessions {
+            let pidAlive = kill(Int32(session.pid), 0) == 0
+            if !pidAlive {
+                if let markedAt = stalePidTimers[sessionId] {
+                    if now.timeIntervalSince(markedAt) >= 30 {
+                        sessions.removeValue(forKey: sessionId)
+                        stalePidTimers.removeValue(forKey: sessionId)
+                    }
+                } else {
+                    stalePidTimers[sessionId] = now
+                }
+            } else {
+                stalePidTimers.removeValue(forKey: sessionId)
+            }
+        }
+    }
 }

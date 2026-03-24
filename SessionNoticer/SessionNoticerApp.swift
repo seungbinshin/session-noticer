@@ -20,11 +20,54 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var cancellables = Set<AnyCancellable>()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        let bundleId = Bundle.main.bundleIdentifier ?? "com.sessionnoticer"
+        let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleId)
+        if running.count > 1 {
+            if let other = running.first(where: { $0 != NSRunningApplication.current }) {
+                other.activate()
+            }
+            NSApp.terminate(nil)
+            return
+        }
+
         NSApp.setActivationPolicy(.accessory)
         setupStatusItem()
         setupPopover()
+
+        if !UserDefaults.standard.bool(forKey: "hooksInstalled") {
+            do {
+                let installer = HookInstaller()
+                try installer.installHooks()
+
+                if let bundledScript = Bundle.main.path(forResource: "session-noticer-hook", ofType: nil) {
+                    try installer.installHookScript(from: bundledScript)
+                }
+
+                UserDefaults.standard.set(true, forKey: "hooksInstalled")
+            } catch {
+                NSLog("SessionNoticer: Failed to install hooks: \(error)")
+                let alert = NSAlert()
+                alert.messageText = "Setup Failed"
+                alert.informativeText = "Could not install Claude Code hooks: \(error.localizedDescription)"
+                alert.runModal()
+            }
+        }
+
+        let checkOptPrompt = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
+        let options = [checkOptPrompt: true] as CFDictionary
+        let trusted = AXIsProcessTrustedWithOptions(options)
+        if !trusted {
+            NSLog("SessionNoticer: Accessibility permission not granted yet")
+        }
+
         setupEventWatcher()
         scanExistingSessions()
+        sessionManager.startStaleSessionCleanup()
+
+        sessionManager.$sessions
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.updateIcon() }
+            .store(in: &cancellables)
     }
 
     private func setupStatusItem() {
@@ -85,13 +128,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         guard let button = statusItem?.button else { return }
         let count = sessionManager.needsAttentionCount
         if count > 0 {
-            button.image = NSImage(systemSymbolName: "cpu", accessibilityDescription: "Needs attention")
-            button.image?.isTemplate = false
-            statusItem?.button?.title = " \(count)"
-        } else {
+            let image = NSImage(systemSymbolName: "cpu.fill", accessibilityDescription: "Needs attention")!
+            let config = NSImage.SymbolConfiguration(paletteColors: [.systemOrange])
+            button.image = image.withSymbolConfiguration(config)
+            button.title = " \(count)"
+        } else if sessionManager.sessions.isEmpty {
             button.image = NSImage(systemSymbolName: "cpu", accessibilityDescription: "Session Noticer")
             button.image?.isTemplate = true
-            statusItem?.button?.title = ""
+            button.title = ""
+        } else {
+            let image = NSImage(systemSymbolName: "cpu.fill", accessibilityDescription: "Sessions active")!
+            let config = NSImage.SymbolConfiguration(paletteColors: [.systemGreen])
+            button.image = image.withSymbolConfiguration(config)
+            button.title = ""
         }
     }
 
