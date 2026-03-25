@@ -12,6 +12,11 @@ mkdir -p "$EVENTS_DIR"
 # Read full payload from stdin
 PAYLOAD=$(cat)
 
+# Debug: log raw payload to help diagnose hook issues
+DEBUG_DIR="$HOME/Library/Application Support/SessionNoticer/debug"
+mkdir -p "$DEBUG_DIR"
+echo "$(date '+%Y-%m-%d %H:%M:%S') [$EVENT_TYPE] $PAYLOAD" >> "$DEBUG_DIR/hook-payloads.log"
+
 # Extract all fields and write event file atomically in a single python3 call
 printf '%s' "$PAYLOAD" | /usr/bin/python3 -c "
 import sys, json, time, os, tempfile
