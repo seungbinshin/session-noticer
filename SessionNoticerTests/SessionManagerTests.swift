@@ -40,14 +40,13 @@ final class SessionManagerTests: XCTestCase {
         XCTAssertNil(manager.sessions["s1"])
     }
 
-    func testNeedsAttentionCountIncludesBothStates() {
+    func testNeedsAttentionCountOnlyPermission() {
         manager.processEvent(makeEvent(type: .sessionStart, sessionId: "s1"))
         manager.processEvent(makeEvent(type: .sessionStart, sessionId: "s2"))
-        manager.processEvent(makeEvent(type: .sessionStart, sessionId: "s3"))
-        // s1: needs permission, s2: awaiting response, s3: running
+        // s1: needs permission, s2: awaiting response (done, not urgent)
         manager.processEvent(makeEvent(type: .notification, sessionId: "s1", notifType: .permissionPrompt))
         manager.processEvent(makeEvent(type: .stop, sessionId: "s2"))
-        XCTAssertEqual(manager.needsAttentionCount, 2)
+        XCTAssertEqual(manager.needsAttentionCount, 1) // only permission counts
     }
 
     func testStopFromNeedsPermissionTransitionsToAwaitingResponse() {
@@ -71,17 +70,10 @@ final class SessionManagerTests: XCTestCase {
         XCTAssertEqual(manager.sessions["s1"]?.state, .completed)
     }
 
-    func testStopReturnsTrueWhenTransitioningFromRunning() {
+    func testStopNeverTriggersBanner() {
         manager.processEvent(makeEvent(type: .sessionStart, sessionId: "s1"))
         let triggered = manager.processEvent(makeEvent(type: .stop, sessionId: "s1"))
-        XCTAssertTrue(triggered)
-    }
-
-    func testStopReturnsFalseWhenAlreadyAwaiting() {
-        manager.processEvent(makeEvent(type: .sessionStart, sessionId: "s1"))
-        manager.processEvent(makeEvent(type: .stop, sessionId: "s1"))
-        let triggered = manager.processEvent(makeEvent(type: .stop, sessionId: "s1"))
-        XCTAssertFalse(triggered)
+        XCTAssertFalse(triggered) // Stop = Done, not urgent, no banner
     }
 
     func testRemoteSessionCreatedWithHostname() {

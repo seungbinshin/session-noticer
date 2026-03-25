@@ -7,9 +7,9 @@ struct SessionRowView: View {
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 8) {
-                if session.state == .needsPermission || session.state == .awaitingResponse {
+                if session.state == .needsPermission {
                     RoundedRectangle(cornerRadius: 1.5)
-                        .fill(session.state == .needsPermission ? Color.orange : Color.yellow)
+                        .fill(Color.orange)
                         .frame(width: 3)
                 }
                 VStack(alignment: .leading, spacing: 2) {
@@ -38,11 +38,7 @@ struct SessionRowView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(
-                session.state == .needsPermission ? Color.orange.opacity(0.08) :
-                session.state == .awaitingResponse ? Color.yellow.opacity(0.06) :
-                Color.clear
-            )
+            .background(session.state == .needsPermission ? Color.orange.opacity(0.08) : Color.clear)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -65,9 +61,9 @@ struct StatusPill: View {
     private var label: String {
         switch state {
         case .running: return "Running"
-        case .awaitingResponse: return "Awaiting Response"
-        case .needsPermission: return "Needs Permission"
-        case .completed: return "Completed"
+        case .awaitingResponse: return "Done"
+        case .needsPermission: return "Action"
+        case .completed: return "Idle"
         }
     }
 

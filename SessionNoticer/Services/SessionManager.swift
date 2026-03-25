@@ -5,7 +5,7 @@ class SessionManager: ObservableObject {
     @Published var sessions: [String: Session] = [:]
 
     var needsAttentionCount: Int {
-        sessions.values.filter { $0.state == .needsPermission || $0.state == .awaitingResponse }.count
+        sessions.values.filter { $0.state == .needsPermission }.count
     }
 
     var sortedSessions: [Session] {
@@ -57,15 +57,13 @@ class SessionManager: ObservableObject {
 
         case .stop:
             guard sessions[event.sessionId] != nil else {
-                // Session not known yet (app started after session) — create it
                 createSessionFromEvent(event)
                 sessions[event.sessionId]?.state = .awaitingResponse
-                return true
+                return false
             }
-            let wasRunning = sessions[event.sessionId]?.state == .running
             sessions[event.sessionId]?.state = .awaitingResponse
             sessions[event.sessionId]?.lastUpdated = Date()
-            return wasRunning
+            return false
 
         case .notification:
             guard sessions[event.sessionId] != nil else {
@@ -98,8 +96,17 @@ class SessionManager: ObservableObject {
         }
     }
 
-    /// Create a session from any hook event (for sessions the app didn't see start)
+    /// Create a session from any hook event (for sessions the app didn't see start).
+    /// Deduplicates: if a session with the same CWD already exists under a different ID
+    /// (e.g., scanner used PID-file ID, hook uses conversation ID), replace the old one.
     private func createSessionFromEvent(_ event: HookEvent) {
+        // Remove any existing session with the same CWD to prevent duplicates
+        // (PID-file sessionId often differs from hook sessionId after resume)
+        let existingKey = sessions.first(where: { $0.value.cwd == event.cwd })?.key
+        if let key = existingKey, key != event.sessionId {
+            sessions.removeValue(forKey: key)
+        }
+
         var session = Session(
             sessionId: event.sessionId, pid: event.pid,
             cwd: event.cwd, transcriptPath: event.transcriptPath

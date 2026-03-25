@@ -154,25 +154,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func updateIcon() {
         guard let button = statusItem?.button else { return }
-        let permCount = sessionManager.sessions.values.filter { $0.state == .needsPermission }.count
-        let awaitCount = sessionManager.sessions.values.filter { $0.state == .awaitingResponse }.count
-        let attentionCount = permCount + awaitCount
+        let permCount = sessionManager.needsAttentionCount
 
         if permCount > 0 {
+            // Orange: sessions need permission (urgent)
             let image = NSImage(systemSymbolName: "cpu.fill", accessibilityDescription: "Needs permission")!
             let config = NSImage.SymbolConfiguration(paletteColors: [.systemOrange])
             button.image = image.withSymbolConfiguration(config)
-            button.title = " \(attentionCount)"
-        } else if awaitCount > 0 {
-            let image = NSImage(systemSymbolName: "cpu.fill", accessibilityDescription: "Awaiting response")!
-            let config = NSImage.SymbolConfiguration(paletteColors: [.systemYellow])
-            button.image = image.withSymbolConfiguration(config)
-            button.title = " \(awaitCount)"
+            button.title = " \(permCount)"
         } else if sessionManager.sessions.isEmpty {
+            // Gray: no sessions
             button.image = NSImage(systemSymbolName: "cpu", accessibilityDescription: "Session Noticer")
             button.image?.isTemplate = true
             button.title = ""
         } else {
+            // Green: sessions active, no action needed
             let image = NSImage(systemSymbolName: "cpu.fill", accessibilityDescription: "Sessions active")!
             let config = NSImage.SymbolConfiguration(paletteColors: [.systemGreen])
             button.image = image.withSymbolConfiguration(config)
