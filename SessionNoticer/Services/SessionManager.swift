@@ -44,6 +44,10 @@ class SessionManager: ObservableObject {
                     session.source = .remote
                 }
                 sessions[event.sessionId] = session
+            } else {
+                // Session already discovered — update lastUpdated and state
+                sessions[event.sessionId]?.state = .running
+                sessions[event.sessionId]?.lastUpdated = Date()
             }
             return false
 
@@ -52,14 +56,26 @@ class SessionManager: ObservableObject {
             return false
 
         case .stop:
-            guard sessions[event.sessionId] != nil else { return false }
+            guard sessions[event.sessionId] != nil else {
+                // Session not known yet (app started after session) — create it
+                createSessionFromEvent(event)
+                sessions[event.sessionId]?.state = .awaitingResponse
+                return true
+            }
             let wasRunning = sessions[event.sessionId]?.state == .running
             sessions[event.sessionId]?.state = .awaitingResponse
             sessions[event.sessionId]?.lastUpdated = Date()
             return wasRunning
 
         case .notification:
-            guard sessions[event.sessionId] != nil else { return false }
+            guard sessions[event.sessionId] != nil else {
+                createSessionFromEvent(event)
+                if event.notificationType == .permissionPrompt {
+                    sessions[event.sessionId]?.state = .needsPermission
+                    return true
+                }
+                return false
+            }
             if event.notificationType == .permissionPrompt {
                 let wasNotAlready = sessions[event.sessionId]?.state != .needsPermission
                 sessions[event.sessionId]?.state = .needsPermission
@@ -72,11 +88,29 @@ class SessionManager: ObservableObject {
             return false
 
         case .userPrompt:
-            guard sessions[event.sessionId] != nil else { return false }
+            guard sessions[event.sessionId] != nil else {
+                createSessionFromEvent(event)
+                return false
+            }
             sessions[event.sessionId]?.state = .running
             sessions[event.sessionId]?.lastUpdated = Date()
             return false
         }
+    }
+
+    /// Create a session from any hook event (for sessions the app didn't see start)
+    private func createSessionFromEvent(_ event: HookEvent) {
+        var session = Session(
+            sessionId: event.sessionId, pid: event.pid,
+            cwd: event.cwd, transcriptPath: event.transcriptPath
+        )
+        session.state = .running
+        session.lastUpdated = Date()
+        if let hostname = event.hostname, event.source == "remote" {
+            session.hostname = hostname
+            session.source = .remote
+        }
+        sessions[event.sessionId] = session
     }
 
     func addDiscoveredSession(_ session: Session) {
@@ -114,6 +148,8 @@ class SessionManager: ObservableObject {
     private func cleanupStaleSessions() {
         let now = Date()
         for (sessionId, session) in sessions {
+            // Only check local sessions — remote PIDs are from another machine
+            guard session.source == .local else { continue }
             let pidAlive = kill(Int32(session.pid), 0) == 0
             if !pidAlive {
                 if let markedAt = stalePidTimers[sessionId] {

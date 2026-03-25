@@ -17,6 +17,10 @@ DEBUG_DIR="$HOME/Library/Application Support/SessionNoticer/debug"
 mkdir -p "$DEBUG_DIR"
 echo "$(date '+%Y-%m-%d %H:%M:%S') [$EVENT_TYPE] $PAYLOAD" >> "$DEBUG_DIR/hook-payloads.log"
 
+# $PPID is the Claude Code process PID (bash's parent).
+# os.getppid() in Python would give bash's PID (ephemeral, dies after hook).
+CLAUDE_PID=${PPID}
+
 # Extract all fields and write event file atomically in a single python3 call
 printf '%s' "$PAYLOAD" | /usr/bin/python3 -c "
 import sys, json, time, os, tempfile
@@ -24,11 +28,12 @@ import sys, json, time, os, tempfile
 d = json.load(sys.stdin)
 ts = int(time.time() * 1000)
 event_type = '${EVENT_TYPE}'
+claude_pid = ${CLAUDE_PID}
 
 event = {
     'event': event_type,
     'session_id': d.get('session_id', 'unknown'),
-    'pid': os.getppid(),
+    'pid': claude_pid,
     'cwd': d.get('cwd', ''),
     'transcript_path': d.get('transcript_path', ''),
     'notification_type': d.get('notification_type', ''),
