@@ -1,0 +1,41 @@
+#!/bin/bash
+# session-noticer-hook-remote: Called by Claude Code hooks on remote machines.
+# Sends events to local Mac via SSH reverse tunnel.
+# Usage: session-noticer-hook-remote <event_type>
+
+set -euo pipefail
+
+EVENT_TYPE="${1:-unknown}"
+
+cat | /usr/bin/python3 -c "
+import sys, json, time, socket, urllib.request, urllib.error, os
+
+d = json.load(sys.stdin)
+ts = int(time.time() * 1000)
+event_type = '${EVENT_TYPE}'
+
+event = {
+    'event': event_type,
+    'session_id': d.get('session_id', 'unknown'),
+    'pid': os.getppid(),
+    'cwd': d.get('cwd', ''),
+    'transcript_path': d.get('transcript_path', ''),
+    'notification_type': d.get('notification_type', ''),
+    'hostname': socket.gethostname(),
+    'source': 'remote',
+    'timestamp': ts
+}
+
+body = json.dumps(event).encode()
+req = urllib.request.Request(
+    'http://localhost:9999/event',
+    data=body,
+    headers={'Content-Type': 'application/json'},
+    method='POST'
+)
+
+try:
+    urllib.request.urlopen(req, timeout=2)
+except (urllib.error.URLError, ConnectionRefusedError, OSError):
+    pass
+"
