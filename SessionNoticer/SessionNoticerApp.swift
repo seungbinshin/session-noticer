@@ -1,5 +1,8 @@
 import SwiftUI
 import Combine
+import os
+
+private let logger = Logger(subsystem: "com.sessionnoticer", category: "app")
 
 @main
 struct SessionNoticerApp: App {
@@ -12,7 +15,7 @@ struct SessionNoticerApp: App {
     }
 }
 
-class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private let popover = NSPopover()
     private let sessionManager = SessionManager()
@@ -40,8 +43,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
                 try installer.installHooks()
                 try installer.installHookScriptFromKnownLocations()
                 UserDefaults.standard.set(true, forKey: "hooksInstalled")
+                logger.info("Hooks installed successfully")
             } catch {
-                NSLog("SessionNoticer: Failed to install hooks: \(error)")
+                logger.error("Failed to install hooks: \(error.localizedDescription)")
                 let alert = NSAlert()
                 alert.messageText = "Setup Failed"
                 alert.informativeText = "Could not install Claude Code hooks: \(error.localizedDescription)"
@@ -53,7 +57,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         let options = [checkOptPrompt: true] as CFDictionary
         let trusted = AXIsProcessTrustedWithOptions(options)
         if !trusted {
-            NSLog("SessionNoticer: Accessibility permission not granted yet")
+            logger.warning("Accessibility permission not granted yet")
         }
 
         setupEventWatcher()
@@ -77,14 +81,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     private func setupPopover() {
-        popover.behavior = .transient
-        popover.delegate = self
+        // Use .semitransient so clicks inside the popover work reliably
+        // (.transient can dismiss the popover before button actions fire)
+        popover.behavior = .semitransient
+        popover.animates = true
         let view = MenuBarView(
             sessionManager: sessionManager,
             onSessionTap: { [weak self] session in
                 guard let self else { return }
-                self.popover.performClose(nil)
-                ITerm2Focuser.focusSession(session, in: self.sessionManager)
+                logger.info("Session tapped: \(session.projectName) (PID: \(session.pid))")
+                // Close popover AFTER scheduling the focus (async to avoid race)
+                let sessionCopy = session
+                DispatchQueue.main.async {
+                    self.popover.performClose(nil)
+                    ITerm2Focuser.focusSession(sessionCopy, in: self.sessionManager)
+                }
             },
             onQuit: {
                 NSApp.terminate(nil)
@@ -102,10 +113,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         eventWatcher = EventWatcher(eventsDirectory: eventsDir)
         eventWatcher?.onEvent = { [weak self] event in
             guard let self else { return }
+            logger.debug("Event received: \(event.event.rawValue) for session \(event.sessionId)")
             let triggered = self.sessionManager.processEvent(event)
             self.updateIcon()
             if triggered {
-                BannerController.shared.showBanner(for: self.sessionManager.sessions[event.sessionId])
+                let session = self.sessionManager.sessions[event.sessionId]
+                BannerController.shared.showBanner(for: session)
             }
         }
         eventWatcher?.processExistingEvents()
@@ -114,7 +127,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     private func scanExistingSessions() {
         let scanner = SessionScanner()
-        for session in scanner.discoverSessions() {
+        let sessions = scanner.discoverSessions()
+        logger.info("Discovered \(sessions.count) existing sessions")
+        for session in sessions {
             sessionManager.addDiscoveredSession(session)
         }
         updateIcon()
@@ -127,13 +142,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         let attentionCount = permCount + awaitCount
 
         if permCount > 0 {
-            // Orange: at least one session needs permission (most urgent)
             let image = NSImage(systemSymbolName: "cpu.fill", accessibilityDescription: "Needs permission")!
             let config = NSImage.SymbolConfiguration(paletteColors: [.systemOrange])
             button.image = image.withSymbolConfiguration(config)
             button.title = " \(attentionCount)"
         } else if awaitCount > 0 {
-            // Yellow: sessions awaiting user response
             let image = NSImage(systemSymbolName: "cpu.fill", accessibilityDescription: "Awaiting response")!
             let config = NSImage.SymbolConfiguration(paletteColors: [.systemYellow])
             button.image = image.withSymbolConfiguration(config)
@@ -143,7 +156,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             button.image?.isTemplate = true
             button.title = ""
         } else {
-            // Green: sessions running or completed, no action needed
             let image = NSImage(systemSymbolName: "cpu.fill", accessibilityDescription: "Sessions active")!
             let config = NSImage.SymbolConfiguration(paletteColors: [.systemGreen])
             button.image = image.withSymbolConfiguration(config)

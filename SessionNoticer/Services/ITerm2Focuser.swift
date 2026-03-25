@@ -1,5 +1,8 @@
 import Foundation
 import AppKit
+import os
+
+private let logger = Logger(subsystem: "com.sessionnoticer", category: "focuser")
 
 class ITerm2Focuser {
     static func focusSession(_ session: Session, in manager: SessionManager? = nil) {
@@ -10,12 +13,12 @@ class ITerm2Focuser {
             tty = resolved
             manager?.sessions[session.id]?.tty = resolved
         } else {
-            NSLog("SessionNoticer: Could not resolve TTY for PID \(session.pid), falling back to activate")
+            logger.warning("Could not resolve TTY for PID \(session.pid), activating iTerm2")
             activateITerm2()
             return
         }
 
-        NSLog("SessionNoticer: Focusing iTerm2 tab with TTY: \(tty) for \(session.projectName)")
+        logger.info("Focusing iTerm2 tab: TTY=\(tty) project=\(session.projectName)")
         focusITermTab(tty: tty)
     }
 
@@ -28,22 +31,22 @@ class ITerm2Focuser {
         process.standardError = Pipe()
         do {
             try process.run()
-            process.waitUntilExit()
+            // Read pipe BEFORE waitUntilExit to avoid potential deadlock
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
             if let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
                !output.isEmpty, output != "??" {
                 let tty = "/dev/" + output
-                NSLog("SessionNoticer: Resolved PID \(pid) → TTY \(tty)")
+                logger.debug("Resolved PID \(pid) → TTY \(tty)")
                 return tty
             }
         } catch {
-            NSLog("SessionNoticer: Failed to run ps: \(error)")
+            logger.error("Failed to run ps: \(error.localizedDescription)")
         }
         return nil
     }
 
     private static func focusITermTab(tty: String) {
-        // Use tell by process name to avoid issues with app activation
         let script = """
         tell application "iTerm2"
             activate
@@ -64,26 +67,22 @@ class ITerm2Focuser {
         return "not found"
         """
         guard let appleScript = NSAppleScript(source: script) else {
-            NSLog("SessionNoticer: Failed to create AppleScript")
+            logger.error("Failed to create AppleScript")
             return
         }
         var error: NSDictionary?
         let result = appleScript.executeAndReturnError(&error)
         if let error {
-            NSLog("SessionNoticer: AppleScript error: \(error)")
-            // Fallback: try using System Events to bring iTerm2 forward
+            logger.error("AppleScript error: \(error)")
             activateITerm2()
         } else {
-            NSLog("SessionNoticer: AppleScript result: \(result.stringValue ?? "nil")")
+            logger.info("AppleScript result: \(result.stringValue ?? "nil")")
         }
     }
 
     private static func activateITerm2() {
-        // Use NSWorkspace as a fallback — doesn't need Accessibility permission
         if let iterm = NSRunningApplication.runningApplications(withBundleIdentifier: "com.googlecode.iterm2").first {
             iterm.activate()
-        } else {
-            NSWorkspace.shared.launchApplication("iTerm")
         }
     }
 }

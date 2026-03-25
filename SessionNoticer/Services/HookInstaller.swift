@@ -88,7 +88,8 @@ class HookInstaller {
             return // Already installed
         }
 
-        NSLog("SessionNoticer: Could not find session-noticer-hook script to install")
+        throw NSError(domain: "SessionNoticer", code: 1,
+                       userInfo: [NSLocalizedDescriptionKey: "Could not find session-noticer-hook script. Please reinstall the app."])
     }
 
     private func loadExistingSettings() -> [String: Any] {

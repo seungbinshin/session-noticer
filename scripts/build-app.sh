@@ -25,6 +25,9 @@ cp "$BUILD_DIR/release/$APP_NAME" "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 cp "$PROJECT_DIR/SessionNoticer/Resources/session-noticer-hook" "$APP_BUNDLE/Contents/Resources/"
 chmod +x "$APP_BUNDLE/Contents/Resources/session-noticer-hook"
 
+# Create PkgInfo
+echo -n "APPL????" > "$APP_BUNDLE/Contents/PkgInfo"
+
 # Create Info.plist
 cat > "$APP_BUNDLE/Contents/Info.plist" << PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -53,12 +56,17 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << PLIST
     <true/>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>SessionNoticer needs to control iTerm2 to switch to the correct tab when you click a session.</string>
 </dict>
 </plist>
 PLIST
 
+# Ad-hoc codesign the bundle (required for macOS to launch it via `open`)
+codesign --force --sign - "$APP_BUNDLE"
+
 echo ""
-echo "✅ Built: $APP_BUNDLE"
+echo "✅ Built and signed: $APP_BUNDLE"
 echo ""
 echo "To install:"
 echo "  cp -r $APP_BUNDLE /Applications/"
