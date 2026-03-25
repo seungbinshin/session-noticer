@@ -45,4 +45,22 @@ final class HookEventTests: XCTestCase {
         let json = "not json".data(using: .utf8)!
         XCTAssertThrowsError(try JSONDecoder().decode(HookEvent.self, from: json))
     }
+
+    func testParseRemoteEvent() throws {
+        let json = """
+        {"event":"stop","session_id":"remote-123","pid":5678,"cwd":"/home/user/project","transcript_path":"","notification_type":"","hostname":"ha-seattle","source":"remote","timestamp":1774312900123}
+        """.data(using: .utf8)!
+        let event = try JSONDecoder().decode(HookEvent.self, from: json)
+        XCTAssertEqual(event.hostname, "ha-seattle")
+        XCTAssertEqual(event.source, "remote")
+    }
+
+    func testParseLocalEventHasNilHostname() throws {
+        let json = """
+        {"event":"stop","session_id":"local-123","pid":1234,"cwd":"/Users/test/project","transcript_path":"","notification_type":"","timestamp":1774312900123}
+        """.data(using: .utf8)!
+        let event = try JSONDecoder().decode(HookEvent.self, from: json)
+        XCTAssertNil(event.hostname)
+        XCTAssertNil(event.source)
+    }
 }

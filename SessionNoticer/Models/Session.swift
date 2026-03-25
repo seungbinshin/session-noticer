@@ -1,5 +1,10 @@
 import Foundation
 
+enum SessionSource {
+    case local
+    case remote
+}
+
 enum SessionState {
     case running
     case awaitingResponse   // Claude finished a turn, user needs to read and respond
@@ -17,6 +22,8 @@ struct Session: Identifiable {
     var state: SessionState
     var lastUpdated: Date
     var tty: String?
+    var hostname: String?
+    var source: SessionSource
 
     init(sessionId: String, pid: Int, cwd: String, transcriptPath: String) {
         self.id = sessionId
@@ -28,5 +35,7 @@ struct Session: Identifiable {
         self.state = .running
         self.lastUpdated = Date()
         self.tty = nil
+        self.hostname = nil
+        self.source = .local
     }
 }

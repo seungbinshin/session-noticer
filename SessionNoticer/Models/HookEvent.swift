@@ -21,6 +21,8 @@ struct HookEvent: Codable {
     let transcriptPath: String
     let notificationType: NotificationType?
     let timestamp: Int64
+    let hostname: String?
+    let source: String?
 
     enum CodingKeys: String, CodingKey {
         case event
@@ -30,6 +32,8 @@ struct HookEvent: Codable {
         case transcriptPath = "transcript_path"
         case notificationType = "notification_type"
         case timestamp
+        case hostname
+        case source
     }
 
     init(from decoder: Decoder) throws {
@@ -48,12 +52,17 @@ struct HookEvent: Codable {
         } else {
             notificationType = nil
         }
+
+        hostname = try container.decodeIfPresent(String.self, forKey: .hostname)
+        let rawSource = try container.decodeIfPresent(String.self, forKey: .source)
+        source = (rawSource?.isEmpty == false) ? rawSource : nil
     }
 }
 
 extension HookEvent {
     init(event: EventType, sessionId: String, pid: Int, cwd: String,
-         transcriptPath: String, notificationType: NotificationType?, timestamp: Int64) {
+         transcriptPath: String, notificationType: NotificationType?, timestamp: Int64,
+         hostname: String? = nil, source: String? = nil) {
         self.event = event
         self.sessionId = sessionId
         self.pid = pid
@@ -61,5 +70,7 @@ extension HookEvent {
         self.transcriptPath = transcriptPath
         self.notificationType = notificationType
         self.timestamp = timestamp
+        self.hostname = hostname
+        self.source = source
     }
 }
