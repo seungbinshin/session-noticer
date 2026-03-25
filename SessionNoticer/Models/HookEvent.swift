@@ -23,6 +23,7 @@ struct HookEvent: Codable {
     let timestamp: Int64
     let hostname: String?
     let source: String?
+    let sshClientPort: String?
 
     enum CodingKeys: String, CodingKey {
         case event
@@ -34,6 +35,7 @@ struct HookEvent: Codable {
         case timestamp
         case hostname
         case source
+        case sshClientPort = "ssh_client_port"
     }
 
     init(from decoder: Decoder) throws {
@@ -56,13 +58,15 @@ struct HookEvent: Codable {
         hostname = try container.decodeIfPresent(String.self, forKey: .hostname)
         let rawSource = try container.decodeIfPresent(String.self, forKey: .source)
         source = (rawSource?.isEmpty == false) ? rawSource : nil
+        let rawPort = try container.decodeIfPresent(String.self, forKey: .sshClientPort)
+        sshClientPort = (rawPort?.isEmpty == false) ? rawPort : nil
     }
 }
 
 extension HookEvent {
     init(event: EventType, sessionId: String, pid: Int, cwd: String,
          transcriptPath: String, notificationType: NotificationType?, timestamp: Int64,
-         hostname: String? = nil, source: String? = nil) {
+         hostname: String? = nil, source: String? = nil, sshClientPort: String? = nil) {
         self.event = event
         self.sessionId = sessionId
         self.pid = pid
@@ -72,5 +76,6 @@ extension HookEvent {
         self.timestamp = timestamp
         self.hostname = hostname
         self.source = source
+        self.sshClientPort = sshClientPort
     }
 }

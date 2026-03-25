@@ -24,6 +24,7 @@ struct Session: Identifiable {
     var tty: String?
     var hostname: String?
     var source: SessionSource
+    var sshClientPort: String?  // local SSH source port — unique per SSH connection
 
     init(sessionId: String, pid: Int, cwd: String, transcriptPath: String) {
         self.id = sessionId
@@ -37,5 +38,6 @@ struct Session: Identifiable {
         self.tty = nil
         self.hostname = nil
         self.source = .local
+        self.sshClientPort = nil
     }
 }

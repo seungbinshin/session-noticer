@@ -7,7 +7,7 @@ private let logger = Logger(subsystem: "com.sessionnoticer", category: "focuser"
 class ITerm2Focuser {
     static func focusSession(_ session: Session, in manager: SessionManager? = nil) {
         if session.source == .remote {
-            focusSSHTab(hostname: session.hostname ?? "")
+            focusSSHTab(hostname: session.hostname ?? "", sshClientPort: session.sshClientPort)
             return
         }
         let tty: String
@@ -84,12 +84,19 @@ class ITerm2Focuser {
         }
     }
 
-    private static func focusSSHTab(hostname: String) {
-        logger.info("Focusing SSH tab for hostname: \(hostname)")
+    private static func focusSSHTab(hostname: String, sshClientPort: String? = nil) {
+        logger.info("Focusing SSH tab for hostname: \(hostname), clientPort: \(sshClientPort ?? "nil")")
 
-        // Find local ssh process connected to this hostname → get its TTY
+        // First try: match by SSH client port (unique per connection)
+        if let port = sshClientPort, let tty = resolveSSHTTYByPort(port: port) {
+            logger.info("Found SSH TTY by port \(port): \(tty)")
+            focusITermTab(tty: tty)
+            return
+        }
+
+        // Second try: match by hostname in process list
         if let tty = resolveSSHTTY(hostname: hostname) {
-            logger.info("Found SSH TTY: \(tty) for \(hostname)")
+            logger.info("Found SSH TTY by hostname: \(tty) for \(hostname)")
             focusITermTab(tty: tty)
             return
         }
@@ -124,6 +131,51 @@ class ITerm2Focuser {
         } else {
             logger.info("SSH name-match result: \(result.stringValue ?? "nil")")
         }
+    }
+
+    /// Find the local SSH process by its source port (from SSH_CONNECTION) and return its TTY
+    private static func resolveSSHTTYByPort(port: String) -> String? {
+        // lsof finds which process owns the local TCP source port
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
+        process.arguments = ["-i", "tcp:\(port)", "-a", "-c", "ssh", "-F", "pn"]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = Pipe()
+        do {
+            try process.run()
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            guard let output = String(data: data, encoding: .utf8) else { return nil }
+
+            // lsof -F output: p<PID>\nn<name>\n
+            var sshPid: String?
+            for line in output.components(separatedBy: "\n") {
+                if line.hasPrefix("p") {
+                    sshPid = String(line.dropFirst())
+                }
+            }
+
+            guard let pid = sshPid else { return nil }
+
+            // Now get this PID's TTY
+            let psProcess = Process()
+            psProcess.executableURL = URL(fileURLWithPath: "/bin/ps")
+            psProcess.arguments = ["-p", pid, "-o", "tty="]
+            let psPipe = Pipe()
+            psProcess.standardOutput = psPipe
+            psProcess.standardError = Pipe()
+            try psProcess.run()
+            let psData = psPipe.fileHandleForReading.readDataToEndOfFile()
+            psProcess.waitUntilExit()
+            if let tty = String(data: psData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !tty.isEmpty, tty != "??" {
+                return "/dev/" + tty
+            }
+        } catch {
+            logger.error("Failed to resolve SSH TTY by port: \(error.localizedDescription)")
+        }
+        return nil
     }
 
     /// Find the local ssh process connected to a hostname and return its TTY

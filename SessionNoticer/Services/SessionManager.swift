@@ -42,6 +42,7 @@ class SessionManager: ObservableObject {
                 if let hostname = event.hostname, event.source == "remote" {
                     session.hostname = hostname
                     session.source = .remote
+                    session.sshClientPort = event.sshClientPort
                 }
                 sessions[event.sessionId] = session
             } else {
