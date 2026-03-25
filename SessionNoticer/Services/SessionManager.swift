@@ -39,6 +39,10 @@ class SessionManager: ObservableObject {
                 )
                 session.state = .running
                 session.lastUpdated = Date()
+                if let hostname = event.hostname, event.source == "remote" {
+                    session.hostname = hostname
+                    session.source = .remote
+                }
                 sessions[event.sessionId] = session
             }
             return false
@@ -81,9 +85,20 @@ class SessionManager: ObservableObject {
 
     private var stalePidTimers: [String: Date] = [:]
 
+    func cleanupRemoteStaleSessions() {
+        let now = Date()
+        for (sessionId, session) in sessions {
+            guard session.source == .remote else { continue }
+            if now.timeIntervalSince(session.lastUpdated) > 120 {
+                sessions.removeValue(forKey: sessionId)
+            }
+        }
+    }
+
     func startStaleSessionCleanup() {
         Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
             self?.cleanupStaleSessions()
+            self?.cleanupRemoteStaleSessions()
         }
     }
 

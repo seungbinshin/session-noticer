@@ -84,12 +84,36 @@ final class SessionManagerTests: XCTestCase {
         XCTAssertFalse(triggered)
     }
 
+    func testRemoteSessionCreatedWithHostname() {
+        let event = makeEvent(type: .sessionStart, sessionId: "r1", hostname: "ha-seattle", source: "remote")
+        manager.processEvent(event)
+        XCTAssertEqual(manager.sessions["r1"]?.hostname, "ha-seattle")
+        XCTAssertEqual(manager.sessions["r1"]?.source, .remote)
+    }
+
+    func testStaleRemoteSessionRemovedAfterTimeout() {
+        let event = makeEvent(type: .sessionStart, sessionId: "r1", hostname: "ha-seattle", source: "remote")
+        manager.processEvent(event)
+        manager.sessions["r1"]?.lastUpdated = Date().addingTimeInterval(-130)
+        manager.cleanupRemoteStaleSessions()
+        XCTAssertNil(manager.sessions["r1"])
+    }
+
+    func testRecentRemoteSessionNotRemoved() {
+        let event = makeEvent(type: .sessionStart, sessionId: "r1", hostname: "ha-seattle", source: "remote")
+        manager.processEvent(event)
+        manager.cleanupRemoteStaleSessions()
+        XCTAssertNotNil(manager.sessions["r1"])
+    }
+
     // MARK: - Helpers
 
     private func makeEvent(
         type: EventType,
         sessionId: String,
-        notifType: NotificationType? = nil
+        notifType: NotificationType? = nil,
+        hostname: String? = nil,
+        source: String? = nil
     ) -> HookEvent {
         HookEvent(
             event: type,
@@ -98,7 +122,9 @@ final class SessionManagerTests: XCTestCase {
             cwd: "/Users/test/project",
             transcriptPath: "/Users/test/.claude/projects/test/\(sessionId).jsonl",
             notificationType: notifType,
-            timestamp: Int64(Date().timeIntervalSince1970 * 1000)
+            timestamp: Int64(Date().timeIntervalSince1970 * 1000),
+            hostname: hostname,
+            source: source
         )
     }
 }
