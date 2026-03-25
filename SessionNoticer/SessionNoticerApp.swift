@@ -20,6 +20,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private let popover = NSPopover()
     private let sessionManager = SessionManager()
     private var eventWatcher: EventWatcher?
+    private var httpListener: HTTPEventListener?
     private var cancellables = Set<AnyCancellable>()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -61,6 +62,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         setupEventWatcher()
+        setupHTTPListener()
         scanExistingSessions()
         sessionManager.startStaleSessionCleanup()
 
@@ -123,6 +125,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         eventWatcher?.processExistingEvents()
         eventWatcher?.start()
+    }
+
+    private func setupHTTPListener() {
+        httpListener = HTTPEventListener(port: 9999)
+        httpListener?.onEvent = { [weak self] event in
+            guard let self else { return }
+            logger.debug("Remote event: \(event.event.rawValue) for \(event.sessionId)")
+            let triggered = self.sessionManager.processEvent(event)
+            self.updateIcon()
+            if triggered {
+                let session = self.sessionManager.sessions[event.sessionId]
+                BannerController.shared.showBanner(for: session)
+            }
+        }
+        httpListener?.start()
     }
 
     private func scanExistingSessions() {
