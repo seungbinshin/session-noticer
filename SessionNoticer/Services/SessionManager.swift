@@ -16,6 +16,7 @@ class SessionManager: ObservableObject {
                 case .awaitingResponse: return 1
                 case .running: return 2
                 case .completed: return 3
+                case .idle: return 4
                 }
             }
             if order(a.state) != order(b.state) {
@@ -131,17 +132,19 @@ class SessionManager: ObservableObject {
         let now = Date()
         for (sessionId, session) in sessions {
             guard session.source == .remote else { continue }
-            // Only remove completed remote sessions after 2 minutes
-            // Running/awaiting sessions stay until SessionEnd or 30 minutes of silence
+            guard session.state != .idle else { continue }
+            // Mark as idle after timeout instead of removing
             let timeout: TimeInterval
             switch session.state {
             case .completed:
                 timeout = 120     // 2 minutes
             case .running, .awaitingResponse, .needsPermission:
                 timeout = 1800    // 30 minutes
+            case .idle:
+                continue
             }
             if now.timeIntervalSince(session.lastUpdated) > timeout {
-                sessions.removeValue(forKey: sessionId)
+                sessions[sessionId]?.state = .idle
             }
         }
     }
@@ -158,11 +161,12 @@ class SessionManager: ObservableObject {
         for (sessionId, session) in sessions {
             // Only check local sessions — remote PIDs are from another machine
             guard session.source == .local else { continue }
+            guard session.state != .idle else { continue }
             let pidAlive = kill(Int32(session.pid), 0) == 0
             if !pidAlive {
                 if let markedAt = stalePidTimers[sessionId] {
                     if now.timeIntervalSince(markedAt) >= 30 {
-                        sessions.removeValue(forKey: sessionId)
+                        sessions[sessionId]?.state = .idle
                         stalePidTimers.removeValue(forKey: sessionId)
                     }
                 } else {

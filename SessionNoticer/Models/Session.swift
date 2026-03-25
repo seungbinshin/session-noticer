@@ -10,6 +10,7 @@ enum SessionState {
     case awaitingResponse   // Claude finished a turn, user needs to read and respond
     case needsPermission    // Claude needs tool approval
     case completed          // Session idle 60s+, task likely done
+    case idle               // No activity for 30+ minutes or PID died
 }
 
 struct Session: Identifiable {

@@ -107,8 +107,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func setupEventWatcher() {
-        let eventsDir = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Application Support/SessionNoticer/events")
+        let eventsDir = Config.eventsDir
 
         BannerController.shared.sessionManager = sessionManager
 
@@ -128,7 +127,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func setupHTTPListener() {
-        httpListener = HTTPEventListener(port: 9999)
+        httpListener = HTTPEventListener(port: Config.httpPort)
         httpListener?.onEvent = { [weak self] event in
             guard let self else { return }
             logger.debug("Remote event: \(event.event.rawValue) for \(event.sessionId)")

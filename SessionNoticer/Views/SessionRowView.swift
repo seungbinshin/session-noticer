@@ -64,6 +64,7 @@ struct StatusPill: View {
         case .awaitingResponse: return "Done"
         case .needsPermission: return "Action"
         case .completed: return "Idle"
+        case .idle: return "Idle"
         }
     }
 
@@ -73,6 +74,7 @@ struct StatusPill: View {
         case .awaitingResponse: return .yellow
         case .needsPermission: return .orange
         case .completed: return .gray
+        case .idle: return .gray
         }
     }
 
@@ -82,6 +84,7 @@ struct StatusPill: View {
         case .awaitingResponse: return .yellow.opacity(0.15)
         case .needsPermission: return .orange.opacity(0.15)
         case .completed: return .gray.opacity(0.15)
+        case .idle: return .gray.opacity(0.15)
         }
     }
 }

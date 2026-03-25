@@ -41,7 +41,7 @@ event = {
 
 body = json.dumps(event).encode()
 req = urllib.request.Request(
-    'http://localhost:9999/event',
+    f'http://localhost:{os.environ.get("SESSION_NOTICER_PORT", "9999")}/event',
     data=body,
     headers={'Content-Type': 'application/json'},
     method='POST'
