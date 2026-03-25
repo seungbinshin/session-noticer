@@ -13,19 +13,30 @@ class HookInstaller {
         var settings = loadExistingSettings()
         var hooks = settings["hooks"] as? [String: Any] ?? [:]
 
+        // Claude Code hook format: each event is an array of { "matcher": "", "hooks": [...] }
         let hookEvents = [
             ("SessionStart", "session_start"), ("SessionEnd", "session_end"),
             ("Stop", "stop"), ("Notification", "notification"), ("UserPromptSubmit", "user_prompt"),
         ]
 
         for (eventName, argName) in hookEvents {
-            var eventHooks = hooks[eventName] as? [[String: Any]] ?? []
             let command = "\(hookScriptPath) \(argName)"
-            let alreadyExists = eventHooks.contains { ($0["command"] as? String) == command }
-            if !alreadyExists {
-                eventHooks.append(["type": "command", "command": command])
+            var matchers = hooks[eventName] as? [[String: Any]] ?? []
+
+            // Check if our hook already exists in any matcher entry
+            let alreadyExists = matchers.contains { matcher in
+                guard let hooksList = matcher["hooks"] as? [[String: Any]] else { return false }
+                return hooksList.contains { ($0["command"] as? String) == command }
             }
-            hooks[eventName] = eventHooks
+
+            if !alreadyExists {
+                // Add a new matcher entry with empty matcher (matches all) and our hook
+                matchers.append([
+                    "matcher": "",
+                    "hooks": [["type": "command", "command": command]]
+                ])
+            }
+            hooks[eventName] = matchers
         }
 
         settings["hooks"] = hooks
