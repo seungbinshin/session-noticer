@@ -86,6 +86,15 @@ class ITerm2Focuser {
 
     private static func focusSSHTab(hostname: String) {
         logger.info("Focusing SSH tab for hostname: \(hostname)")
+
+        // Find local ssh process connected to this hostname → get its TTY
+        if let tty = resolveSSHTTY(hostname: hostname) {
+            logger.info("Found SSH TTY: \(tty) for \(hostname)")
+            focusITermTab(tty: tty)
+            return
+        }
+
+        // Fallback: try matching session name or title containing hostname
         let script = """
         tell application "iTerm2"
             activate
@@ -106,18 +115,47 @@ class ITerm2Focuser {
         end tell
         return "not found"
         """
-        guard let appleScript = NSAppleScript(source: script) else {
-            logger.error("Failed to create SSH AppleScript")
-            return
-        }
+        guard let appleScript = NSAppleScript(source: script) else { return }
         var error: NSDictionary?
         let result = appleScript.executeAndReturnError(&error)
         if let error {
             logger.error("SSH AppleScript error: \(error)")
             activateITerm2()
         } else {
-            logger.info("SSH focus result: \(result.stringValue ?? "nil")")
+            logger.info("SSH name-match result: \(result.stringValue ?? "nil")")
         }
+    }
+
+    /// Find the local ssh process connected to a hostname and return its TTY
+    private static func resolveSSHTTY(hostname: String) -> String? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/ps")
+        // List all processes with their TTY and full command
+        process.arguments = ["-eo", "tty,command"]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = Pipe()
+        do {
+            try process.run()
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            guard let output = String(data: data, encoding: .utf8) else { return nil }
+
+            // Look for ssh processes matching the hostname
+            for line in output.components(separatedBy: "\n") {
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                // Match lines like: ttys005  ssh user@ha-seattle  or  ttys005  ssh ha-seattle
+                if trimmed.contains("ssh") && trimmed.contains(hostname) {
+                    let parts = trimmed.split(separator: " ", maxSplits: 1)
+                    if let ttyPart = parts.first, ttyPart.hasPrefix("ttys") {
+                        return "/dev/" + ttyPart
+                    }
+                }
+            }
+        } catch {
+            logger.error("Failed to search for SSH process: \(error.localizedDescription)")
+        }
+        return nil
     }
 
     private static func activateITerm2() {

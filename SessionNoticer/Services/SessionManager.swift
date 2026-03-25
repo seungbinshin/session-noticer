@@ -89,7 +89,16 @@ class SessionManager: ObservableObject {
         let now = Date()
         for (sessionId, session) in sessions {
             guard session.source == .remote else { continue }
-            if now.timeIntervalSince(session.lastUpdated) > 120 {
+            // Only remove completed remote sessions after 2 minutes
+            // Running/awaiting sessions stay until SessionEnd or 30 minutes of silence
+            let timeout: TimeInterval
+            switch session.state {
+            case .completed:
+                timeout = 120     // 2 minutes
+            case .running, .awaitingResponse, .needsPermission:
+                timeout = 1800    // 30 minutes
+            }
+            if now.timeIntervalSince(session.lastUpdated) > timeout {
                 sessions.removeValue(forKey: sessionId)
             }
         }

@@ -91,12 +91,23 @@ final class SessionManagerTests: XCTestCase {
         XCTAssertEqual(manager.sessions["r1"]?.source, .remote)
     }
 
-    func testStaleRemoteSessionRemovedAfterTimeout() {
+    func testStaleCompletedRemoteSessionRemovedAfterTimeout() {
         let event = makeEvent(type: .sessionStart, sessionId: "r1", hostname: "ha-seattle", source: "remote")
         manager.processEvent(event)
+        // Transition to completed (idle_prompt), then age it past 120s
+        manager.processEvent(makeEvent(type: .notification, sessionId: "r1", notifType: .idlePrompt, hostname: "ha-seattle", source: "remote"))
         manager.sessions["r1"]?.lastUpdated = Date().addingTimeInterval(-130)
         manager.cleanupRemoteStaleSessions()
         XCTAssertNil(manager.sessions["r1"])
+    }
+
+    func testRunningRemoteSessionSurvivesShortTimeout() {
+        let event = makeEvent(type: .sessionStart, sessionId: "r1", hostname: "ha-seattle", source: "remote")
+        manager.processEvent(event)
+        // Running session aged 5 minutes — should NOT be removed (needs 30min)
+        manager.sessions["r1"]?.lastUpdated = Date().addingTimeInterval(-300)
+        manager.cleanupRemoteStaleSessions()
+        XCTAssertNotNil(manager.sessions["r1"])
     }
 
     func testRecentRemoteSessionNotRemoved() {

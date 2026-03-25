@@ -53,8 +53,12 @@ class BannerController {
             tintColor = .orange
         }
 
+        let displayName = session.hostname != nil
+            ? "\(session.hostname!): \(session.projectName)"
+            : session.projectName
+
         let bannerView = BannerView(
-            projectName: session.projectName,
+            projectName: displayName,
             message: message,
             tintColor: tintColor,
             onTap: { [weak self] in
