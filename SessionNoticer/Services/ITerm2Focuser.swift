@@ -6,6 +6,10 @@ private let logger = Logger(subsystem: "com.sessionnoticer", category: "focuser"
 
 class ITerm2Focuser {
     static func focusSession(_ session: Session, in manager: SessionManager? = nil) {
+        if session.source == .remote {
+            focusSSHTab(hostname: session.hostname ?? "")
+            return
+        }
         let tty: String
         if let cached = session.tty {
             tty = cached
@@ -77,6 +81,42 @@ class ITerm2Focuser {
             activateITerm2()
         } else {
             logger.info("AppleScript result: \(result.stringValue ?? "nil")")
+        }
+    }
+
+    private static func focusSSHTab(hostname: String) {
+        logger.info("Focusing SSH tab for hostname: \(hostname)")
+        let script = """
+        tell application "iTerm2"
+            activate
+            repeat with aWindow in windows
+                tell aWindow
+                    repeat with aTab in tabs
+                        repeat with aSession in sessions of aTab
+                            set sessionName to name of aSession
+                            if sessionName contains "\(hostname)" then
+                                select aTab
+                                select aWindow
+                                return "ok"
+                            end if
+                        end repeat
+                    end repeat
+                end tell
+            end repeat
+        end tell
+        return "not found"
+        """
+        guard let appleScript = NSAppleScript(source: script) else {
+            logger.error("Failed to create SSH AppleScript")
+            return
+        }
+        var error: NSDictionary?
+        let result = appleScript.executeAndReturnError(&error)
+        if let error {
+            logger.error("SSH AppleScript error: \(error)")
+            activateITerm2()
+        } else {
+            logger.info("SSH focus result: \(result.stringValue ?? "nil")")
         }
     }
 
