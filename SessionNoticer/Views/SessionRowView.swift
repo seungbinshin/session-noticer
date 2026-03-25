@@ -13,9 +13,19 @@ struct SessionRowView: View {
                         .frame(width: 3)
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(session.projectName)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.primary)
+                    HStack(spacing: 4) {
+                        if let hostname = session.hostname {
+                            Text(hostname)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.blue)
+                            Text(":")
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                        }
+                        Text(session.projectName)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.primary)
+                    }
                     if !session.firstPrompt.isEmpty {
                         Text(session.firstPrompt)
                             .font(.system(size: 11))
