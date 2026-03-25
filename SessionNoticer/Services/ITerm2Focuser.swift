@@ -2,7 +2,6 @@ import Foundation
 import AppKit
 
 class ITerm2Focuser {
-    /// Focus the iTerm2 tab for a session. Pass the SessionManager so resolved TTY can be cached.
     static func focusSession(_ session: Session, in manager: SessionManager? = nil) {
         let tty: String
         if let cached = session.tty {
@@ -11,9 +10,12 @@ class ITerm2Focuser {
             tty = resolved
             manager?.sessions[session.id]?.tty = resolved
         } else {
+            NSLog("SessionNoticer: Could not resolve TTY for PID \(session.pid), falling back to activate")
             activateITerm2()
             return
         }
+
+        NSLog("SessionNoticer: Focusing iTerm2 tab with TTY: \(tty) for \(session.projectName)")
         focusITermTab(tty: tty)
     }
 
@@ -23,45 +25,65 @@ class ITerm2Focuser {
         process.arguments = ["-p", "\(pid)", "-o", "tty="]
         let pipe = Pipe()
         process.standardOutput = pipe
+        process.standardError = Pipe()
         do {
             try process.run()
             process.waitUntilExit()
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
             if let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
                !output.isEmpty, output != "??" {
-                return "/dev/" + output
+                let tty = "/dev/" + output
+                NSLog("SessionNoticer: Resolved PID \(pid) → TTY \(tty)")
+                return tty
             }
-        } catch { }
+        } catch {
+            NSLog("SessionNoticer: Failed to run ps: \(error)")
+        }
         return nil
     }
 
     private static func focusITermTab(tty: String) {
+        // Use tell by process name to avoid issues with app activation
         let script = """
         tell application "iTerm2"
             activate
             repeat with aWindow in windows
-                repeat with aTab in tabs of aWindow
-                    repeat with aSession in sessions of aTab
-                        if tty of aSession is "\(tty)" then
-                            select aTab
-                            select aWindow
-                            return
-                        end if
+                tell aWindow
+                    repeat with aTab in tabs
+                        repeat with aSession in sessions of aTab
+                            if tty of aSession is "\(tty)" then
+                                select aTab
+                                select aWindow
+                                return "ok"
+                            end if
+                        end repeat
                     end repeat
-                end repeat
+                end tell
             end repeat
         end tell
+        return "not found"
         """
-        guard let appleScript = NSAppleScript(source: script) else { return }
+        guard let appleScript = NSAppleScript(source: script) else {
+            NSLog("SessionNoticer: Failed to create AppleScript")
+            return
+        }
         var error: NSDictionary?
-        appleScript.executeAndReturnError(&error)
-        if let error { NSLog("SessionNoticer: AppleScript error: \(error)") }
+        let result = appleScript.executeAndReturnError(&error)
+        if let error {
+            NSLog("SessionNoticer: AppleScript error: \(error)")
+            // Fallback: try using System Events to bring iTerm2 forward
+            activateITerm2()
+        } else {
+            NSLog("SessionNoticer: AppleScript result: \(result.stringValue ?? "nil")")
+        }
     }
 
     private static func activateITerm2() {
-        let script = "tell application \"iTerm2\" to activate"
-        guard let appleScript = NSAppleScript(source: script) else { return }
-        var error: NSDictionary?
-        appleScript.executeAndReturnError(&error)
+        // Use NSWorkspace as a fallback — doesn't need Accessibility permission
+        if let iterm = NSRunningApplication.runningApplications(withBundleIdentifier: "com.googlecode.iterm2").first {
+            iterm.activate()
+        } else {
+            NSWorkspace.shared.launchApplication("iTerm")
+        }
     }
 }
