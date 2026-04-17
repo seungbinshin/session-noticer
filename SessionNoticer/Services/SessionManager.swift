@@ -3,6 +3,11 @@ import Combine
 
 class SessionManager: ObservableObject {
     @Published var sessions: [String: Session] = [:]
+    private let ttyCheck: (Int) -> Bool
+
+    init(ttyCheck: @escaping (Int) -> Bool = TTYCheck.hasControllingTTY) {
+        self.ttyCheck = ttyCheck
+    }
 
     var needsAttentionCount: Int {
         sessions.values.filter { $0.state == .needsPermission }.count
@@ -29,6 +34,12 @@ class SessionManager: ObservableObject {
     /// Returns true if the event triggered a state that needs user attention (for banner)
     @discardableResult
     func processEvent(_ event: HookEvent) -> Bool {
+        // Defense in depth: the hook script already filters non-TTY invocations,
+        // but guard here too in case a stale hook is still installed remotely.
+        // Only gate local events — remote PIDs are on another machine.
+        if event.source != "remote", !ttyCheck(event.pid) {
+            return false
+        }
         switch event.event {
         case .sessionStart:
             if sessions[event.sessionId] == nil {

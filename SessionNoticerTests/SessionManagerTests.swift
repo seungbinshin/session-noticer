@@ -5,7 +5,8 @@ final class SessionManagerTests: XCTestCase {
     var manager: SessionManager!
 
     override func setUp() {
-        manager = SessionManager()
+        // Tests use synthetic PIDs; bypass the TTY filter.
+        manager = SessionManager(ttyCheck: { _ in true })
     }
 
     func testSessionStartCreatesRunningSession() {

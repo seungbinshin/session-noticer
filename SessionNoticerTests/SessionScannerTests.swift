@@ -19,7 +19,7 @@ final class SessionScannerTests: XCTestCase {
         let pidData: [String: Any] = ["pid": pid, "sessionId": "test-session-id", "cwd": "/Users/test/myproject", "startedAt": 1774312900000]
         try JSONSerialization.data(withJSONObject: pidData).write(to: pidFile)
 
-        let scanner = SessionScanner(sessionsDirectory: tempDir)
+        let scanner = SessionScanner(sessionsDirectory: tempDir, ttyCheck: { _ in true })
         let sessions = scanner.discoverSessions()
         XCTAssertEqual(sessions.count, 1)
         XCTAssertEqual(sessions.first?.id, "test-session-id")
@@ -32,7 +32,19 @@ final class SessionScannerTests: XCTestCase {
         let pidData: [String: Any] = ["pid": 999999, "sessionId": "dead-session", "cwd": "/Users/test/project", "startedAt": 1774312900000]
         try JSONSerialization.data(withJSONObject: pidData).write(to: pidFile)
 
-        let scanner = SessionScanner(sessionsDirectory: tempDir)
+        let scanner = SessionScanner(sessionsDirectory: tempDir, ttyCheck: { _ in true })
+        let sessions = scanner.discoverSessions()
+        XCTAssertEqual(sessions.count, 0)
+    }
+
+    func testSkipsNonTTYSession() throws {
+        let pid = ProcessInfo.processInfo.processIdentifier
+        let pidFile = tempDir.appendingPathComponent("\(pid).json")
+        let pidData: [String: Any] = ["pid": pid, "sessionId": "wrapped-session", "cwd": "/Users/test/wrapped", "startedAt": 1774312900000]
+        try JSONSerialization.data(withJSONObject: pidData).write(to: pidFile)
+
+        // Simulate an API-wrapper subprocess with no controlling TTY.
+        let scanner = SessionScanner(sessionsDirectory: tempDir, ttyCheck: { _ in false })
         let sessions = scanner.discoverSessions()
         XCTAssertEqual(sessions.count, 0)
     }

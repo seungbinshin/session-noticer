@@ -9,9 +9,11 @@ struct SessionPidFile: Codable {
 
 class SessionScanner {
     private let sessionsDirectory: URL
+    private let ttyCheck: (Int) -> Bool
 
-    init(sessionsDirectory: URL? = nil) {
+    init(sessionsDirectory: URL? = nil, ttyCheck: @escaping (Int) -> Bool = TTYCheck.hasControllingTTY) {
         self.sessionsDirectory = sessionsDirectory ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude/sessions")
+        self.ttyCheck = ttyCheck
     }
 
     func discoverSessions() -> [Session] {
@@ -23,6 +25,7 @@ class SessionScanner {
         guard let data = try? Data(contentsOf: file),
               let pidFile = try? JSONDecoder().decode(SessionPidFile.self, from: data) else { return nil }
         guard kill(Int32(pidFile.pid), 0) == 0 else { return nil }
+        guard ttyCheck(pidFile.pid) else { return nil }
 
         var session = Session(sessionId: pidFile.sessionId, pid: pidFile.pid, cwd: pidFile.cwd, transcriptPath: "")
         session.state = .running

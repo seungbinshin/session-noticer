@@ -7,6 +7,14 @@ set -euo pipefail
 
 EVENT_TYPE="${1:-unknown}"
 
+# Filter non-interactive claude invocations (API wrappers, SDK subprocesses, etc.).
+# Real terminal sessions have a controlling TTY; wrappers spawn claude without one.
+# macOS ps reports "??" for no-tty; Linux ps reports "?".
+CLAUDE_TTY=$(ps -p $PPID -o tty= 2>/dev/null | tr -d ' ')
+case "$CLAUDE_TTY" in
+    ""|"?"|"??") exit 0 ;;
+esac
+
 # $SSH_CONNECTION = "client_ip client_port server_ip server_port"
 # The client_port uniquely identifies which SSH connection this session runs in
 SSH_CONN="${SSH_CONNECTION:-}"

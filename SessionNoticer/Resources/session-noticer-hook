@@ -12,6 +12,14 @@ mkdir -p "$EVENTS_DIR"
 # Read full payload from stdin
 PAYLOAD=$(cat)
 
+# Filter non-interactive claude invocations (API wrappers, SDK subprocesses, etc.).
+# Real terminal sessions have a controlling TTY; wrappers spawn claude without one.
+# macOS ps reports "??" for no-tty.
+CLAUDE_TTY=$(ps -p $PPID -o tty= 2>/dev/null | tr -d ' ')
+case "$CLAUDE_TTY" in
+    ""|"?"|"??") exit 0 ;;
+esac
+
 # Debug: log raw payload to help diagnose hook issues
 DEBUG_DIR="$HOME/Library/Application Support/SessionNoticer/debug"
 mkdir -p "$DEBUG_DIR"

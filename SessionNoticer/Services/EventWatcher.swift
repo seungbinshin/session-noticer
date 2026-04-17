@@ -5,7 +5,9 @@ private let logger = Logger(subsystem: "com.sessionnoticer", category: "watcher"
 
 class EventWatcher {
     private let eventsDirectory: URL
-    private var pollTimer: Timer?
+    private var dirSource: DispatchSourceFileSystemObject?
+    private var dirFD: Int32 = -1
+    private var fallbackTimer: Timer?
     var onEvent: ((HookEvent) -> Void)?
 
     init(eventsDirectory: URL) {
@@ -22,15 +24,45 @@ class EventWatcher {
     }
 
     func start() {
-        // Poll every 1 second — more reliable than kqueue for small event files
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+        startDirectoryWatch()
+        // Backup poll at low frequency in case a filesystem event is missed
+        // (e.g. volume sleep/wake) or the DispatchSource failed to attach.
+        fallbackTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
             self?.processAllEvents()
         }
     }
 
     func stop() {
-        pollTimer?.invalidate()
-        pollTimer = nil
+        fallbackTimer?.invalidate()
+        fallbackTimer = nil
+        dirSource?.cancel()
+        dirSource = nil
+    }
+
+    private func startDirectoryWatch() {
+        let fd = open(eventsDirectory.path, O_EVTONLY)
+        guard fd >= 0 else {
+            logger.warning("open() failed for \(self.eventsDirectory.path, privacy: .public) — falling back to poll only")
+            return
+        }
+        dirFD = fd
+        let source = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: fd,
+            eventMask: [.write, .extend, .rename],
+            queue: .main
+        )
+        source.setEventHandler { [weak self] in
+            self?.processAllEvents()
+        }
+        source.setCancelHandler { [weak self] in
+            if let self, self.dirFD >= 0 {
+                close(self.dirFD)
+                self.dirFD = -1
+            }
+        }
+        source.resume()
+        dirSource = source
+        logger.info("DispatchSource watching \(self.eventsDirectory.path, privacy: .public)")
     }
 
     private func processAllEvents() {
