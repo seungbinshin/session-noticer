@@ -1,3 +1,4 @@
 .build/
 .superpowers/
 .DS_Store
+.worktrees/
