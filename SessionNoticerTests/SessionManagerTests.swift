@@ -86,12 +86,22 @@ final class SessionManagerTests: XCTestCase {
     func testStaleCompletedRemoteSessionBecomesIdleAfterTimeout() {
         let event = makeEvent(type: .sessionStart, sessionId: "r1", hostname: "ha-seattle", source: "remote")
         manager.processEvent(event)
-        // Transition to completed (idle_prompt), then age it past 120s
+        // Transition to completed (idle_prompt), then age it past 30min
         manager.processEvent(makeEvent(type: .notification, sessionId: "r1", notifType: .idlePrompt, hostname: "ha-seattle", source: "remote"))
-        manager.sessions["r1"]?.lastUpdated = Date().addingTimeInterval(-130)
+        manager.sessions["r1"]?.lastUpdated = Date().addingTimeInterval(-1810)
         manager.cleanupRemoteStaleSessions()
         XCTAssertNotNil(manager.sessions["r1"])
         XCTAssertEqual(manager.sessions["r1"]?.state, .idle)
+    }
+
+    func testCompletedRemoteSessionSurvivesShortTimeout() {
+        let event = makeEvent(type: .sessionStart, sessionId: "r1", hostname: "ha-seattle", source: "remote")
+        manager.processEvent(event)
+        // Completed session aged 5 minutes — should NOT become idle (needs 30min)
+        manager.processEvent(makeEvent(type: .notification, sessionId: "r1", notifType: .idlePrompt, hostname: "ha-seattle", source: "remote"))
+        manager.sessions["r1"]?.lastUpdated = Date().addingTimeInterval(-300)
+        manager.cleanupRemoteStaleSessions()
+        XCTAssertEqual(manager.sessions["r1"]?.state, .completed)
     }
 
     func testRunningRemoteSessionSurvivesShortTimeout() {

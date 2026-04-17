@@ -73,7 +73,8 @@ class HTTPEventListener {
             }
 
             guard let event = try? JSONDecoder().decode(HookEvent.self, from: jsonData) else {
-                logger.warning("Failed to parse event JSON from HTTP")
+                let raw = String(data: jsonData, encoding: .utf8) ?? "<unreadable>"
+                logger.warning("Failed to parse event JSON from HTTP: \(raw)")
                 self?.sendResponse(connection: connection, status: 400, body: "Invalid JSON")
                 return
             }

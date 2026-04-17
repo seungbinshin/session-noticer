@@ -136,10 +136,8 @@ class SessionManager: ObservableObject {
             // Mark as idle after timeout instead of removing
             let timeout: TimeInterval
             switch session.state {
-            case .completed:
-                timeout = 120     // 2 minutes
-            case .running, .awaitingResponse, .needsPermission:
-                timeout = 1800    // 30 minutes
+            case .completed, .running, .awaitingResponse, .needsPermission:
+                timeout = 1800    // 30 minutes for all active states
             case .idle:
                 continue
             }
